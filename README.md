@@ -19,11 +19,23 @@ Assurez-vous d'avoir installé les éléments suivants sur votre machine :
 - npm (installé par défaut avec Node.js)
 - Un compte [Trello](https://trello.com) actif
 
-## Installation et Lancement
+## 📱 Télécharger l'Application (Android)
+
+L'application est prête à être installée sur votre smartphone Android. Vous pouvez télécharger le fichier APK directement depuis ce dépôt :
+
+1. Cliquez ici pour télécharger : **[TrellTech.apk](https://github.com/Paul-Tano/Trelltech/raw/main/TrellTech.apk)**
+2. Transférez le fichier sur votre appareil Android (ou téléchargez-le directement depuis le navigateur de votre téléphone).
+3. Ouvrez le fichier et autorisez l'installation d'applications issues de sources inconnues si votre téléphone vous le demande.
+
+---
+
+## 💻 Installation pour les Développeurs
+
+Si vous souhaitez explorer le code source ou modifier l'application :
 
 1. **Cloner le dépôt :**
    ```bash
-   git clone https://github.com/votre-nom-utilisateur/Trelltech.git
+   git clone https://github.com/Paul-Tano/Trelltech.git
    cd Trelltech
    ```
 
