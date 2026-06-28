@@ -7,10 +7,9 @@ import { useRouter, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-/* const API_KEY = process.env.EXPO_PUBLIC_TRELLO_API_KEY!;
-const REDIRECT_URI = process.env.EXPO_PUBLIC_TRELLO_REDIRECT_URI!; */
-const API_KEY = "d87a8c55a297ef97c8a4c33a3fc05fe0";
-const REDIRECT_URI = "trelltech://";
+const API_KEY = process.env.EXPO_PUBLIC_TRELLO_API_KEY!;
+const REDIRECT_URI = process.env.EXPO_PUBLIC_TRELLO_REDIRECT_URI!;
+
 
 const FEATURES = [
   { icon: "albums-outline" as const, label: "Gérez vos workspaces" },
