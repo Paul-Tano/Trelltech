@@ -25,7 +25,7 @@ L'application parle directement à l'API REST de Trello : il n'y a pas de serveu
 
 ## Télécharger (Android)
 
-Une ancienne version de l'APK, antérieure à la refonte, est disponible ici : **[TrellTech.apk](https://github.com/Paul-Tano/Trelltech/raw/main/TrellTech.apk)**. Les prochaines versions seront publiées dans les [Releases](https://github.com/Paul-Tano/Trelltech/releases).
+Les APK sont publiés dans les [Releases](https://github.com/Paul-Tano/Trelltech/releases) du dépôt (ils ne sont plus versionnés dans le code).
 
 Pour générer un APK à jour :
 
@@ -48,7 +48,7 @@ npx expo start
 ### Configuration Trello
 
 1. Créez un Power-Up sur la [page d'administration Trello](https://trello.com/power-ups/admin) et récupérez sa **clé API**.
-2. Dans les *Allowed origins* du Power-Up, ajoutez l'URL de retour utilisée par l'app (par exemple `trelltech://auth`).
+2. Dans les *Allowed origins* du Power-Up, ajoutez l'URL de retour utilisée par l'app (`trelltech://` pour l'app mobile).
 3. Renseignez dans `.env` :
    - `EXPO_PUBLIC_TRELLO_API_KEY` : la clé API ;
    - `EXPO_PUBLIC_TRELLO_REDIRECT_URI` : l'URL de retour.
