@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/Toast";
 import { errorMessage } from "@/utils/errors";
 import { haptics } from "@/utils/haptics";
 import { useResource } from "./useResource";
+import { useStar } from "./useStar";
 
 /**
  * Un board complet : infos, listes avec leurs cartes et membres.
@@ -26,6 +27,10 @@ export function useBoard(boardId: string) {
 
   const resource = useResource(fetcher, "Impossible de charger ce board.");
   const { setData } = resource;
+
+  const toggleStar = useStar((_idBoard, starred) =>
+    setData((prev) => (prev ? { ...prev, board: { ...prev.board, starred } } : prev)),
+  );
 
   const setLists = (update: (lists: ListWithCards[]) => ListWithCards[]) =>
     setData((prev) => (prev ? { ...prev, lists: update(prev.lists) } : prev));
@@ -86,5 +91,6 @@ export function useBoard(boardId: string) {
     renameList,
     removeList,
     addCard,
+    toggleStar,
   };
 }

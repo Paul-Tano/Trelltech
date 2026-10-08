@@ -6,11 +6,13 @@ L'application parle directement à l'API REST de Trello : il n'y a pas de serveu
 
 ## Fonctionnalités
 
-- **Espaces de travail** : liste, création, suppression (avec confirmation).
-- **Boards** : grille adaptative reprenant la couleur du board Trello ; création, modification, suppression.
+- **Accueil** : raccourci « Mes cartes » et carrousel des boards favoris.
+- **Mes cartes** : toutes les cartes qui vous sont assignées, groupées par échéance (en retard, aujourd'hui, 7 jours, plus tard…).
+- **Espaces de travail** : liste, création, modification, suppression (avec confirmation).
+- **Boards** : grille adaptative reprenant la couleur du board Trello ; création avec choix de la couleur et d'un modèle (Kanban, Scrum, suivi de bugs, projet perso) ou copie d'un board existant ; modification, suppression, favoris.
 - **Listes** : colonnes défilantes alignées au glissement ; création, renommage, archivage.
 - **Cartes** : étiquettes, échéance (en retard / bientôt / terminée), indicateurs (description, commentaires, pièces jointes, checklist) et membres assignés.
-- **Détail d'une carte** : édition du titre et de la description, déplacement vers une autre liste, assignation des membres du board, marquage de l'échéance comme terminée, ouverture dans Trello.
+- **Détail d'une carte** : titre et description, étiquettes (ajout, retrait, création), échéance avec calendrier, déplacement vers une autre liste, membres, checklists (progression, cocher, ajouter, supprimer), commentaires (lire, écrire, supprimer les siens), ouverture dans Trello.
 - **Confort** : tirer pour actualiser, rafraîchissement au retour sur un écran, mises à jour optimistes, notifications de succès ou d'erreur, retours haptiques, accessibilité (libellés pour lecteur d'écran, contrastes AA, zones tactiles de 44 px minimum).
 
 ## Sécurité

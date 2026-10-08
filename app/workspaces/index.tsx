@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Workspace } from "@/types";
 import { Theme } from "@/constants/theme";
@@ -16,6 +17,7 @@ import ActionSheet from "@/components/ui/ActionSheet";
 import EntityForm from "@/components/ui/EntityForm";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/States";
 import WorkspaceCard from "@/components/workspace/WorkspaceCard";
+import StarredBoardCard from "@/components/board/StarredBoardCard";
 
 function greeting() {
   const hour = new Date().getHours();
@@ -28,10 +30,23 @@ export default function WorkspacesScreen() {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { me } = useMe();
-  const { workspaces, status, error, refreshing, refresh, retry, addWorkspace, removeWorkspace } = useWorkspaces();
+  const {
+    workspaces,
+    starred,
+    status,
+    error,
+    refreshing,
+    refresh,
+    retry,
+    addWorkspace,
+    editWorkspace,
+    removeWorkspace,
+    toggleStar,
+  } = useWorkspaces();
 
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<Workspace | null>(null);
+  const [editing, setEditing] = useState<Workspace | null>(null);
 
   const firstName = me?.fullName?.split(" ")[0];
 
@@ -65,6 +80,50 @@ export default function WorkspacesScreen() {
           <Avatar member={me} size={48} />
         </Pressable>
       </View>
+
+      <Pressable
+        onPress={() => router.push("/my-cards")}
+        accessibilityRole="button"
+        accessibilityLabel="Mes cartes : toutes les cartes qui me sont assignées"
+        style={({ pressed }) => [styles.shortcut, pressed && styles.shortcutPressed]}
+      >
+        <View style={styles.shortcutIcon}>
+          <Ionicons name="checkmark-done-outline" size={22} color={colors.onPrimary} />
+        </View>
+        <View style={styles.shortcutText}>
+          <AppText variant="headline">Mes cartes</AppText>
+          <AppText variant="caption" color="textMuted">
+            Tout ce qui vous est assigné, trié par échéance
+          </AppText>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={colors.textSubtle} />
+      </Pressable>
+
+      {starred.length > 0 ? (
+        <>
+          <View style={styles.sectionRow}>
+            <Ionicons name="star" size={16} color={colors.warning} />
+            <AppText variant="headline" accessibilityRole="header">
+              Favoris
+            </AppText>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.starred}
+            style={styles.starredScroll}
+          >
+            {starred.map((board) => (
+              <StarredBoardCard
+                key={board.id}
+                board={board}
+                onPress={() => router.push(`/boards/${board.id}`)}
+                onToggleStar={() => toggleStar(board.id, true)}
+              />
+            ))}
+          </ScrollView>
+        </>
+      ) : null}
 
       <View style={styles.sectionRow}>
         <AppText variant="headline" accessibilityRole="header">
@@ -145,6 +204,24 @@ export default function WorkspacesScreen() {
         />
       </Sheet>
 
+      <Sheet visible={!!editing} onClose={() => setEditing(null)} title="Modifier l'espace de travail">
+        {editing ? (
+          <EntityForm
+            nameLabel="Nom"
+            namePlaceholder="Nom de l'espace"
+            withDescription
+            initialValues={{ name: editing.displayName, desc: editing.desc }}
+            submitLabel="Enregistrer"
+            onCancel={() => setEditing(null)}
+            onSubmit={async ({ name, desc }) => {
+              const ok = await editWorkspace(editing.id, { displayName: name, desc });
+              if (ok) setEditing(null);
+              return ok;
+            }}
+          />
+        ) : null}
+      </Sheet>
+
       <ActionSheet
         visible={!!selected}
         onClose={() => setSelected(null)}
@@ -153,6 +230,7 @@ export default function WorkspacesScreen() {
           selected
             ? [
                 { label: "Ouvrir", icon: "open-outline", onPress: () => router.push(`/workspaces/${selected.id}`) },
+                { label: "Modifier", icon: "create-outline", onPress: () => setEditing(selected) },
                 { label: "Supprimer", icon: "trash-outline", destructive: true, onPress: () => askDelete(selected) },
               ]
             : []
@@ -187,4 +265,25 @@ const makeStyles = ({ colors, radius, spacing }: Theme) =>
       justifyContent: "center",
     },
     skeletons: { gap: spacing.md },
+    shortcut: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.md,
+      marginTop: spacing.xl,
+      padding: spacing.lg,
+      borderRadius: radius.lg + 4,
+      backgroundColor: colors.primarySoft,
+    },
+    shortcutPressed: { opacity: 0.85, transform: [{ scale: 0.985 }] },
+    shortcutIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: radius.md,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    shortcutText: { flex: 1, gap: 2 },
+    starredScroll: { marginHorizontal: -(spacing.lg + 4) },
+    starred: { gap: spacing.md, paddingHorizontal: spacing.lg + 4, paddingBottom: spacing.sm },
   });

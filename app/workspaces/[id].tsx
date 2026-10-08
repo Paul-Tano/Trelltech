@@ -14,6 +14,8 @@ import ActionSheet from "@/components/ui/ActionSheet";
 import EntityForm from "@/components/ui/EntityForm";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/States";
 import BoardTile from "@/components/board/BoardTile";
+import CreateBoardForm from "@/components/board/CreateBoardForm";
+import IconButton from "@/components/ui/IconButton";
 
 const GUTTER = 20;
 const GAP = 14;
@@ -24,12 +26,25 @@ export default function WorkspaceScreen() {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { width } = useWindowDimensions();
-  const { workspace, boards, status, error, refreshing, refresh, retry, addBoard, editBoard, removeBoard } =
-    useBoards(id);
+  const {
+    workspace,
+    boards,
+    status,
+    error,
+    refreshing,
+    refresh,
+    retry,
+    addBoard,
+    editBoard,
+    removeBoard,
+    toggleStar,
+    editWorkspace,
+  } = useBoards(id);
 
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<Board | null>(null);
   const [editing, setEditing] = useState<Board | null>(null);
+  const [editingWorkspace, setEditingWorkspace] = useState(false);
 
   // Grille adaptative : 2 colonnes sur téléphone, plus sur tablette.
   const columns = Math.max(2, Math.floor((width - GUTTER * 2 + GAP) / 200));
@@ -49,7 +64,19 @@ export default function WorkspaceScreen() {
 
   return (
     <Screen>
-      <Header title={workspace?.displayName ?? "Espace de travail"} subtitle={subtitle} />
+      <Header
+        title={workspace?.displayName ?? "Espace de travail"}
+        subtitle={subtitle}
+        right={
+          workspace ? (
+            <IconButton
+              icon="create-outline"
+              accessibilityLabel="Modifier l'espace de travail"
+              onPress={() => setEditingWorkspace(true)}
+            />
+          ) : null
+        }
+      />
 
       {status === "error" && error ? (
         <ErrorState message={error} onRetry={retry} />
@@ -95,14 +122,11 @@ export default function WorkspaceScreen() {
       {status === "ready" && boards.length > 0 ? <Fab label="Nouveau board" onPress={() => setCreating(true)} /> : null}
 
       <Sheet visible={creating} onClose={() => setCreating(false)} title="Nouveau board">
-        <EntityForm
-          nameLabel="Nom du board"
-          namePlaceholder="Ex. Lancement v2"
-          withDescription
-          submitLabel="Créer"
+        <CreateBoardForm
+          existingBoards={boards}
           onCancel={() => setCreating(false)}
-          onSubmit={async ({ name, desc }) => {
-            const ok = await addBoard(name, desc);
+          onSubmit={async (values) => {
+            const ok = await addBoard(values);
             if (ok) setCreating(false);
             return ok;
           }}
@@ -127,6 +151,24 @@ export default function WorkspaceScreen() {
         ) : null}
       </Sheet>
 
+      <Sheet visible={editingWorkspace} onClose={() => setEditingWorkspace(false)} title="Modifier l'espace de travail">
+        {workspace ? (
+          <EntityForm
+            nameLabel="Nom"
+            namePlaceholder="Nom de l'espace"
+            withDescription
+            initialValues={{ name: workspace.displayName, desc: workspace.desc }}
+            submitLabel="Enregistrer"
+            onCancel={() => setEditingWorkspace(false)}
+            onSubmit={async ({ name, desc }) => {
+              const ok = await editWorkspace({ displayName: name, desc });
+              if (ok) setEditingWorkspace(false);
+              return ok;
+            }}
+          />
+        ) : null}
+      </Sheet>
+
       <ActionSheet
         visible={!!selected}
         onClose={() => setSelected(null)}
@@ -134,6 +176,11 @@ export default function WorkspaceScreen() {
         actions={
           selected
             ? [
+                {
+                  label: selected.starred ? "Retirer des favoris" : "Ajouter aux favoris",
+                  icon: selected.starred ? "star" : "star-outline",
+                  onPress: () => toggleStar(selected.id, !!selected.starred),
+                },
                 { label: "Modifier", icon: "create-outline", onPress: () => setEditing(selected) },
                 { label: "Supprimer", icon: "trash-outline", destructive: true, onPress: () => askDelete(selected) },
               ]

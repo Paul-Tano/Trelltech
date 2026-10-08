@@ -32,3 +32,11 @@ export const addMemberToCard = async (cardId: string, memberId: string): Promise
 export const removeMemberFromCard = async (cardId: string, memberId: string): Promise<void> => {
     await api.delete(`/cards/${cardId}/idMembers/${memberId}`);
 };
+
+/** Cartes ouvertes assignées à l'utilisateur, tous boards confondus. */
+export const getMyCards = async (): Promise<Card[]> => {
+    const response = await api.get("/members/me/cards", {
+        params: { filter: "open", fields: "name,idList,idBoard,idMembers,closed,due,dueComplete,labels,badges" },
+    });
+    return response.data;
+};

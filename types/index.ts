@@ -27,6 +27,11 @@ export type CreateWorkspaceInput = {
     desc?: string;
 };
 
+export type UpdateWorkspaceInput = {
+    displayName?: string;
+    desc?: string;
+};
+
 export type BoardPrefs = {
     backgroundColor?: string | null;
     backgroundTopColor?: string | null;
@@ -40,6 +45,7 @@ export type Board = {
     closed: boolean;
     url?: string;
     prefs?: BoardPrefs;
+    starred?: boolean;
 };
 
 export type Label = {
@@ -87,6 +93,9 @@ export type CreateBoardInput = {
     name: string;
     idOrganization: string;
     desc?: string;
+    background?: BoardBackground;
+    /** Copie la structure (listes, étiquettes) d'un board existant. */
+    idBoardSource?: string;
 };
 
 export type UpdateBoardInput = {
@@ -117,3 +126,34 @@ export type UpdateCardInput = {
     dueComplete?: boolean;
     pos?: "top" | "bottom" | number;
 };
+
+export type CheckItem = {
+    id: string;
+    name: string;
+    state: "complete" | "incomplete";
+    pos?: number;
+};
+
+export type Checklist = {
+    id: string;
+    name: string;
+    idCard: string;
+    checkItems: CheckItem[];
+};
+
+/** Action Trello de type "commentCard". */
+export type Comment = {
+    id: string;
+    date: string;
+    data: { text: string };
+    memberCreator: Pick<Member, "id" | "fullName" | "username" | "avatarUrl">;
+};
+
+export type BoardStar = {
+    id: string;
+    idBoard: string;
+    pos: number;
+};
+
+/** Couleurs de fond proposées par Trello à la création d'un board. */
+export type BoardBackground = "blue" | "orange" | "green" | "red" | "purple" | "pink" | "lime" | "sky" | "grey";

@@ -35,8 +35,21 @@ export default function BoardScreen() {
   const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  const { board, lists, members, status, error, refreshing, refresh, retry, addList, renameList, removeList, addCard } =
-    useBoard(id);
+  const {
+    board,
+    lists,
+    members,
+    status,
+    error,
+    refreshing,
+    refresh,
+    retry,
+    addList,
+    renameList,
+    removeList,
+    addCard,
+    toggleStar,
+  } = useBoard(id);
 
   const [sheet, setSheet] = useState<SheetState>(null);
   const [menuList, setMenuList] = useState<ListWithCards | null>(null);
@@ -66,6 +79,15 @@ export default function BoardScreen() {
           title={board?.name ?? "Board"}
           subtitle={status === "ready" ? `${lists.length} liste${lists.length > 1 ? "s" : ""} · ${cardCount} carte${cardCount > 1 ? "s" : ""}` : undefined}
           right={
+            <>
+            {board ? (
+              <IconButton
+                icon={board.starred ? "star" : "star-outline"}
+                variant="onColor"
+                accessibilityLabel={board.starred ? "Retirer des favoris" : "Ajouter aux favoris"}
+                onPress={() => toggleStar(board.id, !!board.starred)}
+              />
+            ) : null}
             <IconButton
               icon="refresh"
               variant="onColor"
@@ -73,6 +95,7 @@ export default function BoardScreen() {
               onPress={refresh}
               disabled={refreshing || status !== "ready"}
             />
+            </>
           }
         />
       </View>

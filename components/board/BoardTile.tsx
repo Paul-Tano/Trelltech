@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import { Ionicons } from "@expo/vector-icons";
 import { Board } from "@/types";
 import { Theme } from "@/constants/theme";
 import { useThemedStyles } from "@/hooks/useTheme";
@@ -30,6 +31,11 @@ export default function BoardTile({ board, index, width, onPress, onMore }: Prop
       >
         <View style={[styles.cover, { backgroundColor: color }]}>
           <View style={styles.coverShine} />
+          {board.starred ? (
+            <View style={styles.star} accessibilityLabel="Favori">
+              <Ionicons name="star" size={12} color="#FFD34E" />
+            </View>
+          ) : null}
           <AppText style={styles.letter}>{board.name.charAt(0).toUpperCase()}</AppText>
           <IconButton
             icon="ellipsis-horizontal"
@@ -78,5 +84,16 @@ const makeStyles = ({ colors, radius, spacing, shadows }: Theme) =>
     },
     letter: { color: "#FFFFFF", fontSize: 32, lineHeight: 36, fontWeight: "800" },
     more: { position: "absolute", top: spacing.sm, right: spacing.sm },
+    star: {
+      position: "absolute",
+      top: spacing.sm + 6,
+      left: spacing.sm + 2,
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: "rgba(0,0,0,0.2)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
     body: { padding: spacing.md, gap: 2, minHeight: 64 },
   });
