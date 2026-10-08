@@ -1,211 +1,239 @@
-import { useCallback, useEffect, useState } from "react";
-import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert, RefreshControl, StyleSheet} from "react-native";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { ReactNode, useState } from "react";
+import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { getCardById, deleteCard, updateCard } from "@/services/cardService";
-import { Card } from "@/types";
+import { Theme } from "@/constants/theme";
+import { useTheme, useThemedStyles } from "@/hooks/useTheme";
+import { useCard } from "@/hooks/useCard";
+import { confirm } from "@/utils/confirm";
+import Screen from "@/components/ui/Screen";
+import Header from "@/components/ui/Header";
+import IconButton, { IconName } from "@/components/ui/IconButton";
+import AppText from "@/components/ui/AppText";
+import Avatar from "@/components/ui/Avatar";
+import Button from "@/components/ui/Button";
+import Chip from "@/components/ui/Chip";
+import Sheet from "@/components/ui/Sheet";
+import ActionSheet from "@/components/ui/ActionSheet";
+import EntityForm from "@/components/ui/EntityForm";
+import { ErrorState, Skeleton } from "@/components/ui/States";
+import DueBadge from "@/components/card/DueBadge";
+import LabelPill from "@/components/card/LabelPill";
 
 export default function CardScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const insets = useSafeAreaInsets();
+  const { card, lists, members, status, error, refreshing, refresh, retry, update, moveTo, toggleMember, remove } =
+    useCard(id);
 
-  const [card, setCard] = useState<Card | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const loadCard = useCallback(async () => {
-    try {
-      setError("");
-      const data = await getCardById(id);
-      setCard(data);
-    } catch (e: any) {
-      setError(e?.message || "Impossible de charger la carte.");
-    }
-  }, [id]);
+  const currentList = lists.find((l) => l.id === card?.idList);
 
-  useEffect(() => {
-    if (id) {
-      setLoading(true);
-      loadCard().finally(() => setLoading(false));
-    }
-  }, [id, loadCard]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadCard();
-    setRefreshing(false);
-  }, [loadCard]);
-
-  const handleDelete = async () => {
-    Alert.alert("Supprimer", `Supprimer "${card?.name}" ?`, [
-      { text: "Annuler", style: "cancel" },
-      {
-        text: "Supprimer",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await deleteCard(id);
-            router.back();
-          } catch (e: any) {
-            Alert.alert("Erreur", e?.message || "Suppression impossible.");
-          }
-        },
-      },
-    ]);
+  const askDelete = async () => {
+    if (!card) return;
+    const ok = await confirm({
+      title: "Supprimer la carte ?",
+      message: `« ${card.name} » sera supprimée définitivement.`,
+      confirmLabel: "Supprimer",
+    });
+    if (ok && (await remove())) router.back();
   };
-
-  const handleEdit = () => {
-    Alert.prompt(
-      "Modifier la carte",
-      "Nouveau nom",
-      async (name) => {
-        if (!name?.trim()) return;
-        try {
-          const updated = await updateCard(id, { name: name.trim() });
-          setCard(updated);
-        } catch (e: any) {
-          Alert.alert("Erreur", e?.message || "Modification impossible.");
-        }
-      },
-      "plain-text",
-      card?.name,
-    );
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <Stack.Screen options={{ title: "Chargement…" }} />
-        <ActivityIndicator size="large" color="#7F77DD" />
-      </View>
-    );
-  }
-
-  if (error || !card) {
-    return (
-      <View style={styles.centered}>
-        <Stack.Screen options={{ title: "Erreur" }} />
-        <Ionicons name="alert-circle-outline" size={48} color="#EF4444" />
-        <Text style={styles.errorTitle}>Erreur</Text>
-        <Text style={styles.errorMsg}>{error || "Carte introuvable."}</Text>
-        <TouchableOpacity style={styles.retryBtn} onPress={loadCard}>
-          <Text style={styles.retryText}>Réessayer</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.scrollContent}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      <Stack.Screen options={{ title: card.name }} />
+    <Screen>
+      <Header
+        title={currentList ? currentList.name : "Carte"}
+        subtitle={currentList ? "Liste" : undefined}
+        right={
+          card ? (
+            <IconButton icon="ellipsis-horizontal" accessibilityLabel="Options de la carte" onPress={() => setMenuOpen(true)} />
+          ) : null
+        }
+      />
 
-      <View style={styles.card}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={18} color="#374151" />
-          <Text style={styles.backText}>Retour</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.cardName}>{card.name}</Text>
-
-        <Text style={styles.sectionTitle}>Description</Text>
-        <Text style={styles.desc}>{card.desc || "Pas de description."}</Text>
-        <View style={styles.actions}>
-          <TouchableOpacity style={styles.editBtn} onPress={handleEdit}>
-            <Ionicons name="pencil-outline" size={16} color="#7F77DD" />
-            <Text style={styles.editText}>Modifier</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
-            <Ionicons name="trash-outline" size={16} color="white" />
-            <Text style={styles.deleteText}>Supprimer</Text>
-          </TouchableOpacity>
+      {status === "error" && error ? (
+        <ErrorState message={error} onRetry={retry} />
+      ) : status === "loading" || !card ? (
+        <View style={styles.content}>
+          <Skeleton height={14} width="30%" />
+          <Skeleton height={32} width="80%" />
+          <Skeleton height={120} radius={20} />
+          <Skeleton height={120} radius={20} />
         </View>
-      </View>
-    </ScrollView>
+      ) : (
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} colors={[colors.primary]} />
+          }
+        >
+          {card.labels?.length ? (
+            <View style={styles.labels}>
+              {card.labels.map((label) => (
+                <LabelPill key={label.id} label={label} />
+              ))}
+            </View>
+          ) : null}
+
+          <Pressable
+            onPress={() => setEditing(true)}
+            accessibilityRole="button"
+            accessibilityHint="Modifier le titre et la description"
+          >
+            <AppText variant="title">{card.name}</AppText>
+          </Pressable>
+
+          {card.due ? (
+            <View style={styles.dueRow}>
+              <DueBadge due={card.due} dueComplete={card.dueComplete} large />
+              <Button
+                label={card.dueComplete ? "Rouvrir" : "Marquer terminée"}
+                icon={card.dueComplete ? "refresh" : "checkmark"}
+                variant={card.dueComplete ? "ghost" : "secondary"}
+                onPress={() => update({ dueComplete: !card.dueComplete })}
+              />
+            </View>
+          ) : null}
+
+          <Section icon="reorder-three-outline" title="Description" action={{ label: "Modifier", onPress: () => setEditing(true) }}>
+            <Pressable onPress={() => setEditing(true)} accessibilityRole="button" accessibilityLabel="Modifier la description">
+              <AppText color={card.desc ? "text" : "textSubtle"}>
+                {card.desc || "Ajoutez une description pour donner du contexte à votre équipe…"}
+              </AppText>
+            </Pressable>
+          </Section>
+
+          <Section icon="swap-horizontal-outline" title="Déplacer vers">
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+              {lists.map((list) => (
+                <Chip
+                  key={list.id}
+                  label={list.name}
+                  selected={list.id === card.idList}
+                  onPress={() => list.id !== card.idList && moveTo(list.id)}
+                />
+              ))}
+            </ScrollView>
+          </Section>
+
+          <Section icon="people-outline" title="Membres" subtitle="Touchez un membre du board pour l'assigner ou le retirer.">
+            {members.length === 0 ? (
+              <AppText color="textSubtle">Aucun membre sur ce board.</AppText>
+            ) : (
+              <View style={styles.wrap}>
+                {members.map((member) => (
+                  <Chip
+                    key={member.id}
+                    label={member.fullName || member.username}
+                    selected={card.idMembers.includes(member.id)}
+                    onPress={() => toggleMember(member)}
+                    leading={<Avatar member={member} size={24} />}
+                  />
+                ))}
+              </View>
+            )}
+          </Section>
+
+          {card.url ? (
+            <Button
+              label="Ouvrir dans Trello"
+              icon="open-outline"
+              variant="ghost"
+              onPress={() => card.url && Linking.openURL(card.url)}
+            />
+          ) : null}
+        </ScrollView>
+      )}
+
+      <Sheet visible={editing} onClose={() => setEditing(false)} title="Modifier la carte">
+        {card ? (
+          <EntityForm
+            nameLabel="Titre"
+            namePlaceholder="Titre de la carte"
+            withDescription
+            initialValues={{ name: card.name, desc: card.desc }}
+            submitLabel="Enregistrer"
+            onCancel={() => setEditing(false)}
+            onSubmit={async ({ name, desc }) => {
+              const ok = await update({ name, desc });
+              if (ok) setEditing(false);
+              return ok;
+            }}
+          />
+        ) : null}
+      </Sheet>
+
+      <ActionSheet
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        title={card?.name}
+        actions={[
+          { label: "Modifier", icon: "create-outline", onPress: () => setEditing(true) },
+          { label: "Supprimer la carte", icon: "trash-outline", destructive: true, onPress: askDelete },
+        ]}
+      />
+    </Screen>
   );
 }
 
-const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FAFAF8",
-    gap: 12,
-    padding: 24,
-  },
-  errorTitle: { fontSize: 20, fontWeight: "700", color: "#EF4444" },
-  errorMsg: { fontSize: 14, color: "#374151", textAlign: "center" },
-  retryBtn: {
-    backgroundColor: "#EEEDFE",
-    borderRadius: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  retryText: { fontWeight: "600", color: "#7F77DD" },
-  scroll: { flex: 1, backgroundColor: "#FAFAF8" },
-  scrollContent: { padding: 16 },
-  card: {
-    backgroundColor: "white",
-    borderRadius: 24,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  backBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    alignSelf: "flex-start",
-    backgroundColor: "#F3F4F6",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    marginBottom: 20,
-  },
-  backText: { fontWeight: "600", color: "#374151" },
-  cardName: {
-    fontSize: 26,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 8,
-  },
-  desc: { fontSize: 15, color: "#374151", lineHeight: 24, marginBottom: 24 },
-  actions: { gap: 12 },
-  editBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#EEEDFE",
-    borderRadius: 16,
-    paddingVertical: 14,
-  },
-  editText: { fontWeight: "600", color: "#7F77DD" },
-  deleteBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#EF4444",
-    borderRadius: 16,
-    paddingVertical: 14,
-  },
-  deleteText: { fontWeight: "600", color: "white" },
-});
+type SectionProps = {
+  icon: IconName;
+  title: string;
+  subtitle?: string;
+  action?: { label: string; onPress: () => void };
+  children: ReactNode;
+};
+
+function Section({ icon, title, subtitle, action, children }: SectionProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Ionicons name={icon} size={18} color={colors.textMuted} />
+        <AppText variant="bodyStrong" style={styles.sectionTitle} accessibilityRole="header">
+          {title}
+        </AppText>
+        {action ? (
+          <Pressable onPress={action.onPress} accessibilityRole="button" hitSlop={12}>
+            <AppText variant="caption" color="primary">
+              {action.label}
+            </AppText>
+          </Pressable>
+        ) : null}
+      </View>
+      {subtitle ? (
+        <AppText variant="caption" color="textSubtle">
+          {subtitle}
+        </AppText>
+      ) : null}
+      {children}
+    </View>
+  );
+}
+
+const makeStyles = ({ colors, radius, spacing }: Theme) =>
+  StyleSheet.create({
+    content: { paddingHorizontal: spacing.lg + 4, paddingTop: spacing.sm, gap: spacing.lg },
+    labels: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs + 2 },
+    dueRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md, flexWrap: "wrap" },
+    section: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg + 4,
+      padding: spacing.lg,
+      gap: spacing.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    sectionHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+    sectionTitle: { flex: 1 },
+    chips: { gap: spacing.sm },
+    wrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  });

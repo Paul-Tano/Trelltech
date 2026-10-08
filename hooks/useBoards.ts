@@ -1,68 +1,72 @@
-import { Board, CreateBoardInput, UpdateBoardInput } from "../types";
+import { useCallback } from "react";
+import { Board, UpdateBoardInput } from "../types";
 import { getBoardsByWorkspace, createBoard, deleteBoard, updateBoard } from "../services/boardService";
-import { useEffect, useState } from "react";
+import { getWorkspaceById } from "../services/workspaceService";
+import { useToast } from "@/components/ui/Toast";
+import { errorMessage } from "@/utils/errors";
+import { haptics } from "@/utils/haptics";
+import { useResource } from "./useResource";
 
+/** Un workspace et ses boards ouverts. */
 export const useBoards = (workspaceId: string) => {
-    const [boards, setBoards] = useState<Board[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const toast = useToast();
+    const fetcher = useCallback(async () => {
+        const [workspace, boards] = await Promise.all([
+            getWorkspaceById(workspaceId),
+            getBoardsByWorkspace(workspaceId),
+        ]);
+        return { workspace, boards };
+    }, [workspaceId]);
 
-    const fetchBoard = async () => {
-        setLoading(true);
-        setError(null);
+    const resource = useResource(fetcher, "Impossible de récupérer les boards.");
+    const { setData } = resource;
+
+    const setBoards = (update: (boards: Board[]) => Board[]) =>
+        setData((prev) => (prev ? { ...prev, boards: update(prev.boards) } : prev));
+
+    const addBoard = async (name: string, desc: string): Promise<boolean> => {
         try {
-            const data = await getBoardsByWorkspace(workspaceId);
-            setBoards(data);
-        } catch {
-            setError("Impossible de récupérer les Boards");
-        } finally {
-            setLoading(false);
+            const board = await createBoard({ name, desc, idOrganization: workspaceId });
+            setBoards((boards) => [...boards, board]);
+            haptics.success();
+            toast.success("Board créé");
+            return true;
+        } catch (e) {
+            toast.error(errorMessage(e, "Impossible de créer le board."));
+            return false;
         }
     };
 
-    const addBoard = async (input: CreateBoardInput) => {
-        setLoading(true);
-        setError(null);
+    const editBoard = async (id: string, input: UpdateBoardInput): Promise<boolean> => {
         try {
-            const newBoard = await createBoard(input);
-            setBoards((prev) => [...prev, newBoard]);
-        } catch (err: any) {
-            setError("Impossible de créer le Board");
-        
-        } finally {
-            setLoading(false);
+            const updated = await updateBoard(id, input);
+            setBoards((boards) => boards.map((b) => (b.id === id ? { ...b, ...updated } : b)));
+            toast.success("Board modifié");
+            return true;
+        } catch (e) {
+            toast.error(errorMessage(e, "Impossible de modifier le board."));
+            return false;
         }
     };
 
-    const editBoard = async (id: string, input: UpdateBoardInput) => {
-        setLoading(true);
-        setError(null);
-        try {
-            const updatedBoard = await updateBoard(id, input);
-            setBoards((prev) => prev.map((b) => (b.id === id ? updatedBoard : b)));
-        } catch (err: any) {
-            setError("Impossible de modifier le board");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const removeBoard = async (id: string) => {
-        setLoading(true);
-        setError(null);
+    const removeBoard = async (id: string): Promise<void> => {
+        const snapshot = resource.data;
+        setBoards((boards) => boards.filter((b) => b.id !== id));
         try {
             await deleteBoard(id);
-            setBoards((prev) => prev.filter((b) => b.id !== id));
-        } catch {
-            setError("Impossible de supprimer le board");
-        } finally {
-            setLoading(false);
+            toast.success("Board supprimé");
+        } catch (e) {
+            setData(snapshot);
+            toast.error(errorMessage(e, "Impossible de supprimer le board."));
         }
     };
 
-    useEffect(() => {
-        fetchBoard();
-    }, []);
-
-    return { boards, loading, error, fetchBoard, addBoard, removeBoard, editBoard };
+    return {
+        ...resource,
+        workspace: resource.data?.workspace ?? null,
+        boards: resource.data?.boards ?? [],
+        addBoard,
+        editBoard,
+        removeBoard,
+    };
 };

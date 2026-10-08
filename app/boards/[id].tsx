@@ -1,252 +1,238 @@
-import { View, Text, ScrollView, TouchableOpacity, Modal, Pressable, ActivityIndicator, StyleSheet, KeyboardAvoidingView,
-  Platform,
-} from "react-native";
 import { useState } from "react";
-import { useLocalSearchParams, useRouter, Stack } from "expo-router";
+import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useLists } from "@/hooks/useLists";
+import { ListWithCards } from "@/types";
+import { Theme } from "@/constants/theme";
+import { useTheme, useThemedStyles } from "@/hooks/useTheme";
+import { useBoard } from "@/hooks/useBoard";
+import { confirm } from "@/utils/confirm";
+import Screen from "@/components/ui/Screen";
+import Header from "@/components/ui/Header";
+import IconButton from "@/components/ui/IconButton";
+import AppText from "@/components/ui/AppText";
+import Sheet from "@/components/ui/Sheet";
+import ActionSheet from "@/components/ui/ActionSheet";
+import EntityForm from "@/components/ui/EntityForm";
+import { EmptyState, ErrorState, Skeleton } from "@/components/ui/States";
 import ListColumn from "@/components/list/ListColumn";
-import ListForm from "@/components/list/ListForm";
-import { List } from "@/types";
-import { COLORS } from "@/constants/colors";
+import { boardColor } from "@/components/board/boardColor";
+
+const GAP = 12;
+const HEADER_HEIGHT = 64;
+
+type SheetState =
+  | { kind: "createList" }
+  | { kind: "renameList"; list: ListWithCards }
+  | { kind: "createCard"; list: ListWithCards }
+  | null;
 
 export default function BoardScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { lists, loading, error, addList, removeList, editList } = useLists(id);
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const { board, lists, members, status, error, refreshing, refresh, retry, addList, renameList, removeList, addCard } =
+    useBoard(id);
 
-  const [createModal, setCreateModal] = useState(false);
-  const [editModal, setEditModal] = useState(false);
-  const [listToEdit, setListToEdit] = useState<List | null>(null);
+  const [sheet, setSheet] = useState<SheetState>(null);
+  const [menuList, setMenuList] = useState<ListWithCards | null>(null);
 
-  const handleCreate = async (name: string) => {
-    await addList({ name, idBoard: id });
-    setCreateModal(false);
+  // Les colonnes laissent dépasser la suivante pour indiquer qu'on peut faire défiler.
+  const columnWidth = Math.min(width * 0.82, 320);
+  const columnMaxHeight = height - insets.top - insets.bottom - HEADER_HEIGHT - 40;
+  const tint = board ? boardColor(board) : colors.primary;
+  const cardCount = lists.reduce((total, list) => total + list.cards.length, 0);
+
+  const askArchive = async (list: ListWithCards) => {
+    const ok = await confirm({
+      title: "Archiver la liste ?",
+      message: `« ${list.name} » et ses ${list.cards.length} carte(s) seront archivées. Vous pourrez les restaurer depuis Trello.`,
+      confirmLabel: "Archiver",
+    });
+    if (ok) await removeList(list.id);
   };
 
-  const handleEdit = async (name: string) => {
-    if (!listToEdit) return;
-    await editList(listToEdit.id, { name });
-    setEditModal(false);
-    setListToEdit(null);
-  };
-
-  const openEditModal = (list: List) => {
-    setListToEdit(list);
-    setEditModal(true);
-  };
-
-  if (loading && lists.length === 0) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={COLORS.accent} />
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={styles.centered}>
-        <Ionicons
-          name="alert-circle-outline"
-          size={48}
-          color={COLORS.secondary}
-        />
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
-    );
-  }
+  const closeSheet = () => setSheet(null);
 
   return (
-    <>
-      <Stack.Screen options={{ headerShown: false }} />
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={22} color={COLORS.text} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Board</Text>
-          <TouchableOpacity
-            style={styles.addBtn}
-            onPress={() => setCreateModal(true)}
-          >
-            <Ionicons name="add" size={22} color={COLORS.background} />
-          </TouchableOpacity>
+    <Screen edges={[]} lightStatusBar>
+      <View style={[styles.band, { backgroundColor: tint, paddingTop: insets.top }]}>
+        <Header
+          onColor
+          title={board?.name ?? "Board"}
+          subtitle={status === "ready" ? `${lists.length} liste${lists.length > 1 ? "s" : ""} · ${cardCount} carte${cardCount > 1 ? "s" : ""}` : undefined}
+          right={
+            <IconButton
+              icon="refresh"
+              variant="onColor"
+              accessibilityLabel="Actualiser le board"
+              onPress={refresh}
+              disabled={refreshing || status !== "ready"}
+            />
+          }
+        />
+      </View>
+
+      {status === "error" && error ? (
+        <ErrorState message={error} onRetry={retry} />
+      ) : status === "loading" ? (
+        <View style={styles.skeletonRow}>
+          {[0, 1].map((i) => (
+            <View key={i} style={[styles.skeletonColumn, { width: columnWidth }]}>
+              <Skeleton height={20} width="50%" />
+              <Skeleton height={72} />
+              <Skeleton height={56} />
+              <Skeleton height={88} />
+            </View>
+          ))}
         </View>
-
-        {lists.length === 0 ? (
-          <View style={styles.empty}>
-            <Ionicons name="list-outline" size={48} color={COLORS.accent} />
-            <Text style={styles.emptyText}>Aucune liste</Text>
-            <Text style={styles.emptySubText}>Crée ta première liste</Text>
-          </View>
-        ) : (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.columnsContent}
-          >
-            {lists.map((list) => (
-              <ListColumn
-                key={list.id}
-                list={list}
-                boardId={id}
-                onDelete={() => removeList(list.id)}
-                onEdit={() => openEditModal(list)}
-              />
-            ))}
-          </ScrollView>
-        )}
-
-        <TouchableOpacity
-          style={styles.newListBtn}
-          onPress={() => setCreateModal(true)}
+      ) : lists.length === 0 ? (
+        <EmptyState
+          icon="list-outline"
+          title="Ce board est vide"
+          message="Commencez par créer une liste, par exemple « À faire », « En cours » et « Terminé »."
+          actionLabel="Créer une liste"
+          onAction={() => setSheet({ kind: "createList" })}
+        />
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          snapToInterval={columnWidth + GAP}
+          decelerationRate="fast"
+          contentContainerStyle={[styles.columns, { paddingBottom: insets.bottom + 16 }]}
         >
-          <Ionicons name="add" size={18} color={COLORS.background} />
-          <Text style={styles.newListText}>Ajouter une liste</Text>
-        </TouchableOpacity>
-        <Modal visible={createModal} transparent animationType="slide">
-          <KeyboardAvoidingView
-            style={styles.modalOverlay}
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
+          {lists.map((list) => (
+            <ListColumn
+              key={list.id}
+              list={list}
+              members={members}
+              width={columnWidth}
+              maxHeight={columnMaxHeight}
+              onCardPress={(cardId) => router.push(`/cards/${cardId}`)}
+              onAddCard={() => setSheet({ kind: "createCard", list })}
+              onMore={() => setMenuList(list)}
+            />
+          ))}
+
+          <Pressable
+            onPress={() => setSheet({ kind: "createList" })}
+            accessibilityRole="button"
+            accessibilityLabel="Ajouter une liste"
+            style={({ pressed }) => [styles.addList, { width: columnWidth }, pressed && styles.addListPressed]}
           >
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Nouvelle liste</Text>
-                <Pressable onPress={() => setCreateModal(false)}>
-                  <Ionicons name="close" size={24} color={COLORS.secondary} />
-                </Pressable>
-              </View>
-              <ScrollView keyboardShouldPersistTaps="handled">
-                <ListForm
-                  loading={loading}
-                  onClose={() => setCreateModal(false)}
-                  onCreate={handleCreate}
-                />
-              </ScrollView>
+            <View style={styles.addListIcon}>
+              <Ionicons name="add" size={22} color={colors.primary} />
             </View>
-          </KeyboardAvoidingView>
-        </Modal>
-        <Modal visible={editModal} transparent animationType="slide">
-          <KeyboardAvoidingView
-            style={styles.modalOverlay}
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-          >
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Modifier la liste</Text>
-                <Pressable
-                  onPress={() => {
-                    setEditModal(false);
-                    setListToEdit(null);
-                  }}
-                >
-                  <Ionicons name="close" size={24} color={COLORS.secondary} />
-                </Pressable>
-              </View>
-              <ScrollView keyboardShouldPersistTaps="handled">
-                <ListForm
-                  loading={loading}
-                  onClose={() => {
-                    setEditModal(false);
-                    setListToEdit(null);
-                  }}
-                  onCreate={handleEdit}
-                  defaultValue={listToEdit?.name}
-                />
-              </ScrollView>
-            </View>
-          </KeyboardAvoidingView>
-        </Modal>
-      </SafeAreaView>
-    </>
+            <AppText variant="bodyStrong" color="primary">
+              Ajouter une liste
+            </AppText>
+          </Pressable>
+        </ScrollView>
+      )}
+
+      <Sheet visible={sheet?.kind === "createList"} onClose={closeSheet} title="Nouvelle liste">
+        <EntityForm
+          nameLabel="Nom de la liste"
+          namePlaceholder="Ex. À faire"
+          submitLabel="Créer"
+          onCancel={closeSheet}
+          onSubmit={async ({ name }) => {
+            const ok = await addList(name);
+            if (ok) closeSheet();
+            return ok;
+          }}
+        />
+      </Sheet>
+
+      <Sheet visible={sheet?.kind === "renameList"} onClose={closeSheet} title="Renommer la liste">
+        {sheet?.kind === "renameList" ? (
+          <EntityForm
+            nameLabel="Nom de la liste"
+            namePlaceholder="Nom de la liste"
+            initialValues={{ name: sheet.list.name }}
+            submitLabel="Enregistrer"
+            onCancel={closeSheet}
+            onSubmit={async ({ name }) => {
+              const ok = await renameList(sheet.list.id, name);
+              if (ok) closeSheet();
+              return ok;
+            }}
+          />
+        ) : null}
+      </Sheet>
+
+      <Sheet
+        visible={sheet?.kind === "createCard"}
+        onClose={closeSheet}
+        title={sheet?.kind === "createCard" ? `Nouvelle carte · ${sheet.list.name}` : "Nouvelle carte"}
+      >
+        {sheet?.kind === "createCard" ? (
+          <EntityForm
+            nameLabel="Titre de la carte"
+            namePlaceholder="Ex. Préparer la démo"
+            withDescription
+            submitLabel="Ajouter"
+            onCancel={closeSheet}
+            onSubmit={async ({ name, desc }) => {
+              const ok = await addCard(sheet.list.id, name, desc);
+              if (ok) closeSheet();
+              return ok;
+            }}
+          />
+        ) : null}
+      </Sheet>
+
+      <ActionSheet
+        visible={!!menuList}
+        onClose={() => setMenuList(null)}
+        title={menuList?.name}
+        actions={
+          menuList
+            ? [
+                { label: "Ajouter une carte", icon: "add-circle-outline", onPress: () => setSheet({ kind: "createCard", list: menuList }) },
+                { label: "Renommer", icon: "create-outline", onPress: () => setSheet({ kind: "renameList", list: menuList }) },
+                { label: "Archiver la liste", icon: "archive-outline", destructive: true, onPress: () => askArchive(menuList) },
+              ]
+            : []
+        }
+      />
+    </Screen>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  centered: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-    backgroundColor: COLORS.background,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(180,151,214,0.15)",
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(180,151,214,0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: COLORS.text },
-  addBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.accent,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  columnsContent: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 100,
-    gap: 12,
-  },
-  empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
-  emptyText: { fontSize: 16, fontWeight: "600", color: COLORS.text },
-  emptySubText: { fontSize: 14, color: COLORS.secondary },
-  errorText: { color: COLORS.secondary, fontSize: 14 },
-  newListBtn: {
-    position: "absolute",
-    bottom: 30,
-    alignSelf: "center",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: COLORS.accent,
-    borderRadius: 99,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  newListText: { fontSize: 14, fontWeight: "600", color: COLORS.background },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 24,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  modalTitle: { fontSize: 20, fontWeight: "700", color: COLORS.text },
-});
+const makeStyles = ({ colors, radius, spacing }: Theme) =>
+  StyleSheet.create({
+    band: { borderBottomLeftRadius: radius.xl, borderBottomRightRadius: radius.xl },
+    columns: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: GAP, alignItems: "flex-start" },
+    skeletonRow: { flexDirection: "row", gap: GAP, padding: spacing.lg },
+    skeletonColumn: {
+      gap: spacing.sm,
+      padding: spacing.sm,
+      borderRadius: radius.lg + 4,
+      backgroundColor: colors.surfaceMuted,
+    },
+    addList: {
+      minHeight: 120,
+      borderRadius: radius.lg + 4,
+      borderWidth: 1.5,
+      borderStyle: "dashed",
+      borderColor: colors.border,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: spacing.sm,
+    },
+    addListPressed: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+    addListIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.primarySoft,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+  });

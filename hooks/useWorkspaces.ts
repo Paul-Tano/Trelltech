@@ -1,61 +1,40 @@
-import { useState, useEffect } from "react";
-import { Workspace, CreateWorkspaceInput } from "../types";
-import {getWorkspaces, createWorkspace, deleteWorkspace} from "../services/workspaceService";
-import { router } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
+import { CreateWorkspaceInput } from "../types";
+import { getWorkspaces, createWorkspace, deleteWorkspace } from "../services/workspaceService";
+import { useToast } from "@/components/ui/Toast";
+import { errorMessage } from "@/utils/errors";
+import { haptics } from "@/utils/haptics";
+import { useResource } from "./useResource";
 
 export const useWorkspaces = () => {
-    const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const clearStorage = async () => {
-        await AsyncStorage.removeItem("trello_token");
-        await AsyncStorage.removeItem("trello_key");
-        router.replace("/onboarding/token");
-      };
-    const fetchWorkspaces = async () => {
-        setLoading(true);
-        setError(null);
+    const toast = useToast();
+    const resource = useResource(getWorkspaces, "Impossible de récupérer vos espaces de travail.");
+    const { setData } = resource;
+
+    const addWorkspace = async (input: CreateWorkspaceInput): Promise<boolean> => {
         try {
-            const data = await getWorkspaces();
-            setWorkspaces(data);
-        } catch {
-            setError("Impossible de récupérer les workspaces");
-        } finally {
-            setLoading(false);
+            const workspace = await createWorkspace(input);
+            setData((prev) => [...(prev ?? []), workspace]);
+            haptics.success();
+            toast.success("Espace de travail créé");
+            return true;
+        } catch (e) {
+            toast.error(errorMessage(e, "Impossible de créer l'espace de travail."));
+            return false;
         }
     };
 
-    const addWorkspace = async (input: CreateWorkspaceInput) => {
-        setLoading(true);
-        setError(null);
-        try {
-            const newWorkspace = await createWorkspace(input);
-            setWorkspaces((prev) => [...prev, newWorkspace]);
-        } catch {
-            setError("Impossible de créer le workspace");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const removeWorkspace = async (id: string) => {
-        setLoading(true);
-        setError(null);
+    const removeWorkspace = async (id: string): Promise<void> => {
+        // Suppression optimiste, annulée si l'API refuse.
+        const snapshot = resource.data;
+        setData((prev) => prev?.filter((w) => w.id !== id) ?? prev);
         try {
             await deleteWorkspace(id);
-            setWorkspaces((prev) => prev.filter((w) => w.id !== id));
-        } catch {
-            setError("Impossible de supprimer le workspace");
-        } finally {
-            setLoading(false);
+            toast.success("Espace de travail supprimé");
+        } catch (e) {
+            setData(snapshot);
+            toast.error(errorMessage(e, "Impossible de supprimer l'espace de travail."));
         }
     };
 
-    useEffect(() => {
-        fetchWorkspaces();
-    }, []);
-
-    return { workspaces, loading, error, fetchWorkspaces, addWorkspace, removeWorkspace, clearStorage };
+    return { ...resource, workspaces: resource.data ?? [], addWorkspace, removeWorkspace };
 };

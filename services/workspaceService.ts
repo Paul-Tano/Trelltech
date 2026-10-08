@@ -2,17 +2,18 @@ import api from "./api";
 import { Workspace, CreateWorkspaceInput } from "../types";
 
 export const getWorkspaces = async (): Promise<Workspace[]> => {
-    const response = await api.get("/members/me/organizations");
+    const response = await api.get("/members/me/organizations", {
+        params: { fields: "displayName,desc,memberships" },
+    });
     return response.data;
 };
 
 export const getWorkspaceById = async (id: string): Promise<Workspace> => {
-    const response = await api.get(`/organizations/${id}`);
+    const response = await api.get(`/organizations/${id}`, { params: { fields: "displayName,desc" } });
     return response.data;
 };
 
-export const createWorkspace = async ( input: CreateWorkspaceInput
-): Promise<Workspace> => {
+export const createWorkspace = async (input: CreateWorkspaceInput): Promise<Workspace> => {
     const response = await api.post("/organizations", {
         displayName: input.displayName,
         desc: input.desc ?? "",

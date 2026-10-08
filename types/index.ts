@@ -2,10 +2,11 @@ export type Member = {
     id: string;
     username: string;
     fullName: string;
-    avatarUrl?: string;
+    avatarUrl?: string | null;
     email?: string;
     bio?: string;
 };
+
 export type Memberships = {
     id: string;
     idMember: string;
@@ -13,16 +14,24 @@ export type Memberships = {
     unconfirmed: boolean;
     deactivated: boolean;
 };
+
 export type Workspace = {
     id: string;
     displayName: string;
     desc?: string;
-    memberships: Memberships[]
-}
+    memberships?: Memberships[];
+};
+
 export type CreateWorkspaceInput = {
     displayName: string;
     desc?: string;
-}
+};
+
+export type BoardPrefs = {
+    backgroundColor?: string | null;
+    backgroundTopColor?: string | null;
+};
+
 export type Board = {
     id: string;
     name: string;
@@ -30,14 +39,21 @@ export type Board = {
     idOrganization: string;
     closed: boolean;
     url?: string;
+    prefs?: BoardPrefs;
 };
 
-export type List = {
+export type Label = {
     id: string;
     name: string;
-    idBoard: string;
-    closed: boolean;
-    pos?: number;
+    color: string | null;
+};
+
+export type CardBadges = {
+    description?: boolean;
+    comments?: number;
+    attachments?: number;
+    checkItems?: number;
+    checkItemsChecked?: number;
 };
 
 export type Card = {
@@ -50,21 +66,32 @@ export type Card = {
     closed: boolean;
     pos?: number;
     due?: string | null;
+    dueComplete?: boolean;
+    labels?: Label[];
+    badges?: CardBadges;
     url?: string;
 };
+
+export type List = {
+    id: string;
+    name: string;
+    idBoard: string;
+    closed: boolean;
+    pos?: number;
+};
+
+/** Liste accompagnée de ses cartes (chargées en une seule requête). */
+export type ListWithCards = List & { cards: Card[] };
 
 export type CreateBoardInput = {
     name: string;
     idOrganization: string;
     desc?: string;
-    defaultLists?: boolean;
-    prefs_backgroundColor?: string;
 };
 
 export type UpdateBoardInput = {
     name?: string;
     desc?: string;
-    prefs_backgroundColor?: string;
 };
 
 export type CreateListInput = {
@@ -87,4 +114,6 @@ export type UpdateCardInput = {
     desc?: string;
     idList?: string;
     due?: string | null;
+    dueComplete?: boolean;
+    pos?: "top" | "bottom" | number;
 };

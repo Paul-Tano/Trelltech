@@ -1,53 +1,38 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import api from "./api";
 import { Board, CreateBoardInput, UpdateBoardInput } from "../types";
 
-const BASE_URL = "https://api.trello.com/1";
-
-const getCredentials = async () => {
-    const key = await AsyncStorage.getItem("trello_key");
-    const token = await AsyncStorage.getItem("trello_token");
-    return { key, token };
-};
+const BOARD_FIELDS = "name,desc,idOrganization,closed,url,prefs";
 
 export const getBoardsByWorkspace = async (workspaceId: string): Promise<Board[]> => {
-    const { key, token } = await getCredentials();
-    const res = await fetch(`${BASE_URL}/organizations/${workspaceId}/boards?filter=open&key=${key}&token=${token}`);
-    return res.json();
+    const response = await api.get(`/organizations/${workspaceId}/boards`, {
+        params: { filter: "open", fields: BOARD_FIELDS },
+    });
+    return response.data;
 };
 
 export const getBoardById = async (id: string): Promise<Board> => {
-    const { key, token } = await getCredentials();
-    const res = await fetch(`${BASE_URL}/boards/${id}?key=${key}&token=${token}`);
-    return res.json();
+    const response = await api.get(`/boards/${id}`, { params: { fields: BOARD_FIELDS } });
+    return response.data;
 };
 
 export const createBoard = async (input: CreateBoardInput): Promise<Board> => {
-    const { key, token } = await getCredentials();
-    const url = `${BASE_URL}/boards?key=${key}&token=${token}&name=${encodeURIComponent(input.name)}&idOrganization=${input.idOrganization}&defaultLists=false&desc=${encodeURIComponent(input.desc ?? "")}`;
-    const res = await fetch(url, { method: "POST" });
-    if (!res.ok) {
-        const err = await res.text();
-        console.error("createBoard error:", err);
-        throw new Error(err);
-    }
-    return res.json();
+    const response = await api.post("/boards", null, {
+        params: {
+            name: input.name,
+            idOrganization: input.idOrganization,
+            desc: input.desc ?? "",
+            defaultLists: false,
+        },
+    });
+    return response.data;
 };
 
 export const updateBoard = async (id: string, input: UpdateBoardInput): Promise<Board> => {
-    const { key, token } = await getCredentials();
-    const params = new URLSearchParams({ key: key!, token: token! });
-    if (input.name) params.append("name", input.name);
-    if (input.desc) params.append("desc", input.desc);
-    const res = await fetch(`${BASE_URL}/boards/${id}?${params.toString()}`, { method: "PUT" });
-    if (!res.ok) {
-        const err = await res.text();
-        console.error("updateBoard error:", err);
-        throw new Error(err);
-    }
-    return res.json();
+    // `desc` peut valoir "" pour effacer la description.
+    const response = await api.put(`/boards/${id}`, null, { params: input });
+    return response.data;
 };
 
 export const deleteBoard = async (id: string): Promise<void> => {
-    const { key, token } = await getCredentials();
-    await fetch(`${BASE_URL}/boards/${id}?key=${key}&token=${token}`, { method: "DELETE" });
+    await api.delete(`/boards/${id}`);
 };

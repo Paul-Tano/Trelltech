@@ -42,3 +42,11 @@ app-example
 # generated native folders
 /ios
 /android
+
+# IDE
+.idea/
+.vscode/
+
+# Builds (publiez les APK via GitHub Releases plutôt que dans le dépôt)
+*.apk
+*.aab

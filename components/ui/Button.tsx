@@ -1,30 +1,88 @@
+import { ActivityIndicator, Pressable, StyleSheet, View, ViewStyle } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Theme, TOUCH_TARGET } from "@/constants/theme";
+import { useTheme, useThemedStyles } from "@/hooks/useTheme";
+import AppText from "./AppText";
+import { IconName } from "./IconButton";
 
-import React from "react";
-import { Pressable, Text } from "react-native";
+type Variant = "primary" | "secondary" | "danger" | "ghost";
+
+type Props = {
+  label: string;
+  onPress: () => void;
+  variant?: Variant;
+  icon?: IconName;
+  loading?: boolean;
+  disabled?: boolean;
+  size?: "lg" | "md";
+  style?: ViewStyle;
+};
 
 export default function Button({
-  title,onPress,variant = "primary",
-}: {
-  title: string;
-  onPress: () => void;
-  variant?: "primary" | "danger" | "outline";
-}) {
-  const base = "px-4 py-3 rounded-xl items-center";
-  const styles = {
-    primary: "bg-blue-600",
-    danger: "bg-red-600",
-    outline: "border border-blue-600 bg-transparent",
-  };
+  label,
+  onPress,
+  variant = "primary",
+  icon,
+  loading,
+  disabled,
+  size = "md",
+  style,
+}: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
 
-  const textStyles = {
-    primary: "text-white",
-    danger: "text-white",
-    outline: "text-blue-600",
-  };
+  const foreground = {
+    primary: colors.onPrimary,
+    secondary: colors.primary,
+    danger: colors.danger,
+    ghost: colors.textMuted,
+  }[variant];
 
   return (
-    <Pressable onPress={onPress} className={`${base} ${styles[variant]}`}>
-      <Text className={`font-bold ${textStyles[variant]}`}>{title}</Text>
+    <Pressable
+      onPress={onPress}
+      disabled={disabled || loading}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
+      style={({ pressed }) => [
+        styles.base,
+        size === "lg" && styles.large,
+        styles[variant],
+        pressed && styles.pressed,
+        (disabled || loading) && styles.disabled,
+        style,
+      ]}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color={foreground} />
+      ) : (
+        <View style={styles.content}>
+          {icon ? <Ionicons name={icon} size={18} color={foreground} /> : null}
+          <AppText variant="bodyStrong" style={{ color: foreground }}>
+            {label}
+          </AppText>
+        </View>
+      )}
     </Pressable>
   );
 }
+
+const makeStyles = ({ colors, radius, spacing }: Theme) =>
+  StyleSheet.create({
+    base: {
+      minHeight: TOUCH_TARGET + 4,
+      paddingHorizontal: spacing.lg,
+      borderRadius: radius.md,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    large: { minHeight: 56, borderRadius: radius.lg },
+    content: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+    primary: { backgroundColor: colors.primary },
+    secondary: { backgroundColor: colors.primarySoft },
+    danger: { backgroundColor: colors.dangerSoft },
+    ghost: { backgroundColor: colors.surfaceMuted },
+    pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+    disabled: { opacity: 0.5 },
+  });
