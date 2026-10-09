@@ -1,68 +1,100 @@
-import { Board, CreateBoardInput, UpdateBoardInput } from "../types";
+import { useCallback } from "react";
+import { Board, UpdateBoardInput, UpdateWorkspaceInput } from "../types";
 import { getBoardsByWorkspace, createBoard, deleteBoard, updateBoard } from "../services/boardService";
-import { useEffect, useState } from "react";
+import { getWorkspaceById, updateWorkspace } from "../services/workspaceService";
+import { createList } from "../services/listService";
+import { useToast } from "@/components/ui/Toast";
+import { CreateBoardValues } from "@/components/board/CreateBoardForm";
+import { errorMessage } from "@/utils/errors";
+import { haptics } from "@/utils/haptics";
+import { useResource } from "./useResource";
+import { useStar } from "./useStar";
 
+/** Un workspace et ses boards ouverts. */
 export const useBoards = (workspaceId: string) => {
-    const [boards, setBoards] = useState<Board[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const toast = useToast();
+    const fetcher = useCallback(async () => {
+        const [workspace, boards] = await Promise.all([
+            getWorkspaceById(workspaceId),
+            getBoardsByWorkspace(workspaceId),
+        ]);
+        return { workspace, boards };
+    }, [workspaceId]);
 
-    const fetchBoard = async () => {
-        setLoading(true);
-        setError(null);
+    const resource = useResource(fetcher, "Impossible de récupérer les boards.");
+    const { setData } = resource;
+
+    const setBoards = (update: (boards: Board[]) => Board[]) =>
+        setData((prev) => (prev ? { ...prev, boards: update(prev.boards) } : prev));
+
+    const toggleStar = useStar((idBoard, starred) =>
+        setBoards((boards) => boards.map((b) => (b.id === idBoard ? { ...b, starred } : b))),
+    );
+
+    const addBoard = async ({ name, desc, background, lists, idBoardSource }: CreateBoardValues): Promise<boolean> => {
+        let board: Board;
         try {
-            const data = await getBoardsByWorkspace(workspaceId);
-            setBoards(data);
-        } catch {
-            setError("Impossible de récupérer les Boards");
-        } finally {
-            setLoading(false);
+            board = await createBoard({ name, desc, background, idBoardSource, idOrganization: workspaceId });
+        } catch (e) {
+            toast.error(errorMessage(e, "Impossible de créer le board."));
+            return false;
+        }
+        setBoards((boards) => [...boards, board]);
+        try {
+            // Créées une par une pour respecter l'ordre du modèle.
+            for (const list of lists) await createList({ name: list, idBoard: board.id });
+            haptics.success();
+            toast.success("Board créé");
+        } catch (e) {
+            toast.error(errorMessage(e, "Board créé, mais certaines listes du modèle n'ont pas pu être ajoutées."));
+        }
+        return true;
+    };
+
+    const editBoard = async (id: string, input: UpdateBoardInput): Promise<boolean> => {
+        try {
+            const updated = await updateBoard(id, input);
+            setBoards((boards) => boards.map((b) => (b.id === id ? { ...b, ...updated } : b)));
+            toast.success("Board modifié");
+            return true;
+        } catch (e) {
+            toast.error(errorMessage(e, "Impossible de modifier le board."));
+            return false;
         }
     };
 
-    const addBoard = async (input: CreateBoardInput) => {
-        setLoading(true);
-        setError(null);
-        try {
-            const newBoard = await createBoard(input);
-            setBoards((prev) => [...prev, newBoard]);
-        } catch (err: any) {
-            setError("Impossible de créer le Board");
-        
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const editBoard = async (id: string, input: UpdateBoardInput) => {
-        setLoading(true);
-        setError(null);
-        try {
-            const updatedBoard = await updateBoard(id, input);
-            setBoards((prev) => prev.map((b) => (b.id === id ? updatedBoard : b)));
-        } catch (err: any) {
-            setError("Impossible de modifier le board");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const removeBoard = async (id: string) => {
-        setLoading(true);
-        setError(null);
+    const removeBoard = async (id: string): Promise<void> => {
+        const snapshot = resource.data;
+        setBoards((boards) => boards.filter((b) => b.id !== id));
         try {
             await deleteBoard(id);
-            setBoards((prev) => prev.filter((b) => b.id !== id));
-        } catch {
-            setError("Impossible de supprimer le board");
-        } finally {
-            setLoading(false);
+            toast.success("Board supprimé");
+        } catch (e) {
+            setData(snapshot);
+            toast.error(errorMessage(e, "Impossible de supprimer le board."));
         }
     };
 
-    useEffect(() => {
-        fetchBoard();
-    }, []);
+    const editWorkspace = async (input: UpdateWorkspaceInput): Promise<boolean> => {
+        try {
+            const updated = await updateWorkspace(workspaceId, input);
+            setData((prev) => (prev ? { ...prev, workspace: { ...prev.workspace, ...updated } } : prev));
+            toast.success("Espace de travail modifié");
+            return true;
+        } catch (e) {
+            toast.error(errorMessage(e, "Impossible de modifier l'espace de travail."));
+            return false;
+        }
+    };
 
-    return { boards, loading, error, fetchBoard, addBoard, removeBoard, editBoard };
+    return {
+        ...resource,
+        workspace: resource.data?.workspace ?? null,
+        boards: resource.data?.boards ?? [],
+        addBoard,
+        editBoard,
+        removeBoard,
+        toggleStar,
+        editWorkspace,
+    };
 };

@@ -1,266 +1,127 @@
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Modal, Pressable, ScrollView, KeyboardAvoidingView, Platform,} from "react-native";
-import { useState } from "react";
-import { List, Card } from "@/types";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS } from "@/constants/colors";
-import { useCards } from "@/hooks/useCards";
+import { ListWithCards, Member } from "@/types";
+import { Theme } from "@/constants/theme";
+import { useTheme, useThemedStyles } from "@/hooks/useTheme";
+import AppText from "@/components/ui/AppText";
+import IconButton from "@/components/ui/IconButton";
 import CardItem from "@/components/card/CardItem";
-import CardForm from "@/components/card/CardForm";
-import CardDetail from "@/components/card/CardDetail";
-import { useRouter } from "expo-router";
-import { addMemberToCard } from "@/services/cardService";
 
 type Props = {
-  list: List;
-  boardId: string;
-  onDelete: () => void;
-  onEdit: () => void;
+  list: ListWithCards;
+  members: Member[];
+  width: number;
+  maxHeight: number;
+  onCardPress: (cardId: string) => void;
+  onAddCard: () => void;
+  onMore: () => void;
 };
 
-export default function ListColumn({ list, boardId, onDelete, onEdit }: Props) {
-  const router = useRouter();
-  const { cards, addCard, editCard, removeCard, refetch } = useCards(list.id);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedCard, setSelectedCard] = useState<Card | null>(null);
-
-  const handleArchive = () => {
-    Alert.alert("Archiver", `Archiver "${list.name}" ?`, [
-      { text: "Annuler", style: "cancel" },
-      { text: "Archiver", style: "destructive", onPress: onDelete },
-    ]);
-  };
-
- const handleCreateCard = async (data: {
-   name: string;
-   desc?: string;
-   memberIds?: string[];
- }) => {
-   await addCard(
-     { name: data.name, idList: list.id, desc: data.desc },
-     data.memberIds,
-   );
-   setShowCreateModal(false);
- };
- const handleEditCard = async (data: {
-   name: string;
-   desc?: string;
-   memberIds?: string[];
- }) => {
-   if (!selectedCard) return;
-
-   await editCard(selectedCard.id, {
-     name: data.name,
-     desc: data.desc,
-   });
-
-   if (data.memberIds?.length) {
-     await Promise.all(
-       data.memberIds.map((memberId) =>
-         addMemberToCard(selectedCard.id, memberId),
-       ),
-     );
-     await refetch();
-   }
-
-   setSelectedCard(null);
- };
-
-  const handleDeleteCard = async () => {
-    if (!selectedCard) return;
-    Alert.alert("Supprimer", `Supprimer "${selectedCard.name}" ?`, [
-      { text: "Annuler", style: "cancel" },
-      {
-        text: "Supprimer",
-        style: "destructive",
-        onPress: async () => {
-          await removeCard(selectedCard.id);
-          setSelectedCard(null);
-        },
-      },
-    ]);
-  };
+/** Colonne d'un board : en-tête, cartes défilables et ajout rapide. */
+export default function ListColumn({ list, members, width, maxHeight, onCardPress, onAddCard, onMore }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
 
   return (
-    <View style={styles.column}>
+    <View style={[styles.column, { width, maxHeight }]}>
       <View style={styles.header}>
-        <Text style={styles.title} numberOfLines={1}>
+        <AppText variant="bodyStrong" numberOfLines={1} style={styles.title} accessibilityRole="header">
           {list.name}
-        </Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity onPress={onEdit} style={styles.iconBtn}>
-            <Ionicons name="pencil-outline" size={14} color={COLORS.accent} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleArchive} style={styles.iconBtn}>
-            <Ionicons
-              name="archive-outline"
-              size={14}
-              color={COLORS.secondary}
-            />
-          </TouchableOpacity>
+        </AppText>
+        <View style={styles.count}>
+          <AppText variant="micro" color="textMuted">
+            {list.cards.length}
+          </AppText>
         </View>
+        <IconButton
+          icon="ellipsis-horizontal"
+          size="sm"
+          variant="ghost"
+          accessibilityLabel={`Options de la liste ${list.name}`}
+          onPress={onMore}
+        />
       </View>
 
       <ScrollView
-        style={styles.cardsScroll}
+        style={styles.cards}
+        contentContainerStyle={styles.cardsContent}
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled
       >
-        {cards.length === 0 ? (
-          <View style={styles.emptyZone}>
-            <Ionicons
-              name="layers-outline"
-              size={24}
-              color="rgba(180,151,214,0.3)"
-            />
-            <Text style={styles.emptyCards}>Aucune carte</Text>
+        {list.cards.length === 0 ? (
+          <View style={styles.empty}>
+            <Ionicons name="layers-outline" size={22} color={colors.textSubtle} />
+            <AppText variant="caption" color="textSubtle">
+              Aucune carte pour l’instant
+            </AppText>
           </View>
         ) : (
-          cards.map((card) => (
-            <CardItem
-              key={card.id}
-              card={card}
-              onPress={() => setSelectedCard(card)}
-            />
+          list.cards.map((card) => (
+            <CardItem key={card.id} card={card} members={members} onPress={() => onCardPress(card.id)} />
           ))
         )}
       </ScrollView>
 
-      <TouchableOpacity
-        style={styles.addCardBtn}
-        onPress={() => setShowCreateModal(true)}
+      <Pressable
+        onPress={onAddCard}
+        accessibilityRole="button"
+        accessibilityLabel={`Ajouter une carte dans ${list.name}`}
+        style={({ pressed }) => [styles.addCard, pressed && styles.addCardPressed]}
       >
-        <Ionicons name="add" size={16} color={COLORS.accent} />
-        <Text style={styles.addCardText}>Ajouter une carte</Text>
-      </TouchableOpacity>
-
-      <Modal visible={showCreateModal} transparent animationType="slide">
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nouvelle carte</Text>
-              <Pressable onPress={() => setShowCreateModal(false)}>
-                <Ionicons name="close" size={24} color={COLORS.secondary} />
-              </Pressable>
-            </View>
-            <ScrollView keyboardShouldPersistTaps="handled">
-              <CardForm
-                onSubmit={handleCreateCard}
-                onClose={() => setShowCreateModal(false)}
-              />
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      <Modal visible={!!selectedCard} transparent animationType="slide">
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle} numberOfLines={1}>
-                {selectedCard?.name}
-              </Text>
-              <Pressable onPress={() => setSelectedCard(null)}>
-                <Ionicons name="close" size={24} color={COLORS.secondary} />
-              </Pressable>
-            </View>
-            <ScrollView keyboardShouldPersistTaps="handled">
-              {selectedCard && (
-                <CardDetail
-                  card={selectedCard}
-                  onEdit={handleEditCard}
-                  onDelete={handleDeleteCard}
-                />
-              )}
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        <Ionicons name="add" size={18} color={colors.primary} />
+        <AppText variant="bodyStrong" color="primary">
+          Ajouter une carte
+        </AppText>
+      </Pressable>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  column: {
-    width: 280,
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    padding: 14,
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: "rgba(180,151,214,0.15)",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 14,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(180,151,214,0.15)",
-  },
-  title: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.text,
-    flex: 1,
-    marginRight: 8,
-  },
-  headerActions: { flexDirection: "row", gap: 4 },
-  iconBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: "rgba(180,151,214,0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  cardsScroll: { maxHeight: 320 },
-  emptyZone: { alignItems: "center", gap: 6, paddingVertical: 28 },
-  emptyCards: { fontSize: 12, color: "rgba(180,151,214,0.5)" },
-  addCardBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 12,
-    padding: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: "rgba(180,151,214,0.3)",
-    justifyContent: "center",
-  },
-  addCardText: { fontSize: 13, color: COLORS.accent, fontWeight: "500" },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 24,
-    maxHeight: "85%",
-    borderTopWidth: 1,
-    borderColor: "rgba(180,151,214,0.2)",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.text,
-    flex: 1,
-    marginRight: 12,
-  },
-});
+const makeStyles = ({ colors, radius, spacing }: Theme) =>
+  StyleSheet.create({
+    column: {
+      backgroundColor: colors.surfaceMuted,
+      borderRadius: radius.lg + 4,
+      padding: spacing.sm,
+      alignSelf: "flex-start",
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      paddingLeft: spacing.sm,
+      paddingBottom: spacing.sm,
+    },
+    title: { flexShrink: 1 },
+    count: {
+      minWidth: 22,
+      height: 22,
+      paddingHorizontal: 6,
+      borderRadius: 11,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.surface,
+      marginRight: "auto",
+    },
+    cards: { flexGrow: 0, flexShrink: 1 },
+    cardsContent: { gap: spacing.sm, paddingBottom: spacing.xs },
+    empty: {
+      alignItems: "center",
+      gap: spacing.xs,
+      paddingVertical: spacing.xl,
+      borderRadius: radius.md,
+      borderWidth: 1.5,
+      borderStyle: "dashed",
+      borderColor: colors.border,
+    },
+    addCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: spacing.xs,
+      minHeight: 44,
+      marginTop: spacing.sm,
+      borderRadius: radius.md,
+    },
+    addCardPressed: { backgroundColor: colors.primarySoft },
+  });

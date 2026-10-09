@@ -1,211 +1,150 @@
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Image,
-  Alert,
-} from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { useState } from "react";
+import { Linking, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useRouter } from "expo-router";
+import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useEffect, useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getMe } from "@/services/memberService";
-import { Member } from "@/types";
-import { COLORS } from "@/constants/colors";
+import { Theme } from "@/constants/theme";
+import { useTheme, useThemedStyles } from "@/hooks/useTheme";
+import { useMe } from "@/hooks/useMe";
+import { signOut } from "@/services/authService";
+import { confirm } from "@/utils/confirm";
+import Screen from "@/components/ui/Screen";
+import Header from "@/components/ui/Header";
+import AppText from "@/components/ui/AppText";
+import Avatar from "@/components/ui/Avatar";
+import Button from "@/components/ui/Button";
+import { IconName } from "@/components/ui/IconButton";
+import { Skeleton } from "@/components/ui/States";
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const [me, setMe] = useState<Member | null>(null);
+  const { dark } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const { me, status } = useMe();
+  const [signingOut, setSigningOut] = useState(false);
 
-  useEffect(() => {
-    getMe().then(setMe).catch(console.error);
-  }, []);
-
-  const handleLogout = () => {
-    Alert.alert("Déconnexion", "Tu vas être déconnecté de TrellTech.", [
-      { text: "Annuler", style: "cancel" },
-      {
-        text: "Se déconnecter",
-        style: "destructive",
-        onPress: async () => {
-          await AsyncStorage.clear();
-          router.replace("/onboarding/token");
-        },
-      },
-    ]);
+  const handleSignOut = async () => {
+    const ok = await confirm({
+      title: "Se déconnecter ?",
+      message: "Votre accès à Trello sera révoqué sur cet appareil.",
+      confirmLabel: "Se déconnecter",
+    });
+    if (!ok) return;
+    setSigningOut(true);
+    await signOut();
+    router.replace("/onboarding/token");
   };
 
   return (
-    <>
-      <Stack.Screen options={{ headerShown: false }} />
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={20} color={COLORS.text} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Profil</Text>
-          <View style={{ width: 40 }} />
+    <Screen>
+      <Header title="Profil" />
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.identity}>
+          {status === "loading" ? (
+            <>
+              <Skeleton width={96} height={96} radius={48} />
+              <Skeleton width={160} height={24} />
+              <Skeleton width={100} height={16} />
+            </>
+          ) : (
+            <>
+              <View style={styles.avatarRing}>
+                <Avatar member={me} size={96} />
+              </View>
+              <AppText variant="title" align="center">
+                {me?.fullName || "—"}
+              </AppText>
+              <AppText color="textMuted">@{me?.username ?? "—"}</AppText>
+            </>
+          )}
         </View>
 
-        <View style={styles.content}>
-          <View style={styles.avatarSection}>
-            {me?.avatarUrl ? (
-              <Image
-                source={{ uri: `${me.avatarUrl}/170.png` }}
-                style={styles.avatar}
-              />
-            ) : (
-              <View style={styles.avatarFallback}>
-                <Text style={styles.avatarLetter}>
-                  {me?.fullName?.charAt(0).toUpperCase() ?? "?"}
-                </Text>
-              </View>
-            )}
-            <Text style={styles.name}>{me?.fullName ?? "—"}</Text>
-            <Text style={styles.username}>@{me?.username ?? "—"}</Text>
-          </View>
-
-          <View style={styles.infoCard}>
-            <View style={styles.infoRow}>
-              <View style={styles.infoIcon}>
-                <Ionicons
-                  name="person-outline"
-                  size={18}
-                  color={COLORS.accent}
-                />
-              </View>
-              <View style={styles.infoText}>
-                <Text style={styles.infoLabel}>Nom complet</Text>
-                <Text style={styles.infoValue}>{me?.fullName ?? "—"}</Text>
-              </View>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.infoRow}>
-              <View style={styles.infoIcon}>
-                <Ionicons name="at-outline" size={18} color={COLORS.accent} />
-              </View>
-              <View style={styles.infoText}>
-                <Text style={styles.infoLabel}>Nom d'utilisateur</Text>
-                <Text style={styles.infoValue}>@{me?.username ?? "—"}</Text>
-              </View>
-            </View>
-
-            {me?.email ? (
-              <>
-                <View style={styles.divider} />
-                <View style={styles.infoRow}>
-                  <View style={styles.infoIcon}>
-                    <Ionicons
-                      name="mail-outline"
-                      size={18}
-                      color={COLORS.accent}
-                    />
-                  </View>
-                  <View style={styles.infoText}>
-                    <Text style={styles.infoLabel}>Email</Text>
-                    <Text style={styles.infoValue}>{me.email}</Text>
-                  </View>
-                </View>
-              </>
-            ) : null}
-          </View>
-
-          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-            <Ionicons
-              name="log-out-outline"
-              size={20}
-              color={COLORS.background}
-            />
-            <Text style={styles.logoutText}>Se déconnecter</Text>
-          </TouchableOpacity>
+        <View style={styles.group}>
+          <Row icon="person-outline" label="Nom complet" value={me?.fullName} />
+          <Row icon="at-outline" label="Nom d'utilisateur" value={me?.username ? `@${me.username}` : undefined} />
+          {me?.email ? <Row icon="mail-outline" label="Email" value={me.email} /> : null}
         </View>
-      </SafeAreaView>
-    </>
+
+        <View style={styles.group}>
+          <Row
+            icon="open-outline"
+            label="Ouvrir Trello"
+            value="trello.com"
+            onPress={() => Linking.openURL(me?.username ? `https://trello.com/u/${me.username}` : "https://trello.com")}
+          />
+          <Row icon={dark ? "moon-outline" : "sunny-outline"} label="Apparence" value="Automatique (système)" />
+          <Row icon="information-circle-outline" label="Version" value={Constants.expoConfig?.version ?? "—"} />
+        </View>
+
+        <Button label="Se déconnecter" icon="log-out-outline" variant="danger" size="lg" onPress={handleSignOut} loading={signingOut} />
+      </ScrollView>
+    </Screen>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(180,151,214,0.15)",
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(180,151,214,0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: COLORS.text },
-  content: { flex: 1, paddingHorizontal: 24, paddingTop: 40, gap: 24 },
-  avatarSection: { alignItems: "center", gap: 12 },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 3,
-    borderColor: COLORS.accent,
-  },
-  avatarFallback: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: COLORS.surface,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 3,
-    borderColor: COLORS.accent,
-  },
-  avatarLetter: { fontSize: 40, fontWeight: "800", color: COLORS.accent },
-  name: { fontSize: 22, fontWeight: "700", color: COLORS.text },
-  username: { fontSize: 14, color: COLORS.secondary },
-  infoCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: "rgba(180,151,214,0.15)",
-  },
-  infoRow: { flexDirection: "row", alignItems: "center", gap: 14, padding: 16 },
-  infoIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: "rgba(180,151,214,0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  infoText: { flex: 1, gap: 2 },
-  infoLabel: { fontSize: 12, color: COLORS.secondary },
-  infoValue: { fontSize: 15, fontWeight: "600", color: COLORS.text },
-  divider: {
-    height: 1,
-    backgroundColor: "rgba(180,151,214,0.1)",
-    marginHorizontal: 16,
-  },
-  logoutBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    backgroundColor: "#C0392B",
-    borderRadius: 16,
-    paddingVertical: 16,
-  },
-  logoutText: { fontSize: 16, fontWeight: "700", color: COLORS.background },
-});
+type RowProps = { icon: IconName; label: string; value?: string; onPress?: () => void };
+
+function Row({ icon, label, value, onPress }: RowProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? "link" : undefined}
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+    >
+      <View style={styles.rowIcon}>
+        <Ionicons name={icon} size={18} color={colors.primary} />
+      </View>
+      <View style={styles.rowText}>
+        <AppText variant="caption" color="textMuted">
+          {label}
+        </AppText>
+        <AppText variant="bodyStrong" numberOfLines={1}>
+          {value ?? "—"}
+        </AppText>
+      </View>
+      {onPress ? <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} /> : null}
+    </Pressable>
+  );
+}
+
+const makeStyles = ({ colors, radius, spacing }: Theme) =>
+  StyleSheet.create({
+    content: {
+      paddingHorizontal: spacing.lg + 4,
+      paddingBottom: spacing.xxxl,
+      gap: spacing.xl,
+      maxWidth: 560,
+      width: "100%",
+      alignSelf: "center",
+    },
+    identity: { alignItems: "center", gap: spacing.sm, paddingVertical: spacing.lg },
+    avatarRing: {
+      padding: 4,
+      borderRadius: radius.pill,
+      borderWidth: 2,
+      borderColor: colors.primary,
+      marginBottom: spacing.sm,
+    },
+    group: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg + 4,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      overflow: "hidden",
+    },
+    row: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg, minHeight: 64 },
+    rowPressed: { backgroundColor: colors.surfaceMuted },
+    rowIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: radius.sm + 2,
+      backgroundColor: colors.primarySoft,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    rowText: { flex: 1, gap: 2 },
+  });

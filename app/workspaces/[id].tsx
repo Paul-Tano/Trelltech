@@ -1,305 +1,198 @@
-import { View, Text, FlatList, TouchableOpacity, Modal, Pressable, ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform, ScrollView,
-} from "react-native";
-import { useEffect, useState } from "react";
-import { useLocalSearchParams, useRouter, Stack } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { useBoards } from "@/hooks/useBoards";
-import BoardForm from "@/components/board/BoardForm";
+import { useState } from "react";
+import { FlatList, RefreshControl, StyleSheet, useWindowDimensions, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Board } from "@/types";
-import { COLORS } from "@/constants/colors";
-import { getWorkspaceById } from "@/services/workspaceService";
-import { Workspace } from "@/types";
+import { Theme } from "@/constants/theme";
+import { useTheme, useThemedStyles } from "@/hooks/useTheme";
+import { useBoards } from "@/hooks/useBoards";
+import { confirm } from "@/utils/confirm";
+import Screen from "@/components/ui/Screen";
+import Header from "@/components/ui/Header";
+import Fab from "@/components/ui/Fab";
+import Sheet from "@/components/ui/Sheet";
+import ActionSheet from "@/components/ui/ActionSheet";
+import EntityForm from "@/components/ui/EntityForm";
+import { EmptyState, ErrorState, Skeleton } from "@/components/ui/States";
+import BoardTile from "@/components/board/BoardTile";
+import CreateBoardForm from "@/components/board/CreateBoardForm";
+import IconButton from "@/components/ui/IconButton";
 
+const GUTTER = 20;
+const GAP = 14;
 
-
-export default function WorkspaceDetailScreen() {
+export default function WorkspaceScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const { width } = useWindowDimensions();
+  const {
+    workspace,
+    boards,
+    status,
+    error,
+    refreshing,
+    refresh,
+    retry,
+    addBoard,
+    editBoard,
+    removeBoard,
+    toggleStar,
+    editWorkspace,
+  } = useBoards(id);
 
-useEffect(() => {
-  getWorkspaceById(id).then(setWorkspace).catch(console.error);
-}, [id]);  const { boards, loading, error, addBoard, removeBoard, editBoard } =
-    useBoards(id);
+  const [creating, setCreating] = useState(false);
+  const [selected, setSelected] = useState<Board | null>(null);
+  const [editing, setEditing] = useState<Board | null>(null);
+  const [editingWorkspace, setEditingWorkspace] = useState(false);
 
-  const [createModal, setCreateModal] = useState(false);
-  const [editModal, setEditModal] = useState(false);
-  const [boardToEdit, setBoardToEdit] = useState<Board | null>(null);
+  // Grille adaptative : 2 colonnes sur téléphone, plus sur tablette.
+  const columns = Math.max(2, Math.floor((width - GUTTER * 2 + GAP) / 200));
+  const tileWidth = (width - GUTTER * 2 - GAP * (columns - 1)) / columns;
 
-  const handleCreate = async (name: string, desc?: string) => {
-    await addBoard({ name, idOrganization: id, desc });
-    setCreateModal(false);
+  const askDelete = async (board: Board) => {
+    const ok = await confirm({
+      title: "Supprimer le board ?",
+      message: `« ${board.name} », ses listes et ses cartes seront supprimés définitivement. Cette action est irréversible.`,
+      confirmLabel: "Supprimer",
+    });
+    if (ok) await removeBoard(board.id);
   };
 
-  const handleEdit = async (name: string, desc?: string) => {
-    if (!boardToEdit) return;
-    await editBoard(boardToEdit.id, { name, desc });
-    setEditModal(false);
-    setBoardToEdit(null);
-  };
-
-  const openEditModal = (board: Board) => {
-    setBoardToEdit(board);
-    setEditModal(true);
-  };
-
-  if (loading && boards.length === 0) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={COLORS.accent} />
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={styles.centered}>
-        <Ionicons
-          name="alert-circle-outline"
-          size={48}
-          color={COLORS.secondary}
-        />
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
-    );
-  }
-
-  const renderBoardItem = ({ item }: { item: Board }) => (
-    <TouchableOpacity
-      style={styles.boardTile}
-      onPress={() => router.push(`/boards/${item.id}`)}
-      activeOpacity={0.8}
-    >
-      <View style={styles.boardTileTop}>
-        <Text style={styles.boardTileLetter}>
-          {item.name.charAt(0).toUpperCase()}
-        </Text>
-      </View>
-      <View style={styles.boardTileBottom}>
-        <Text style={styles.boardTileName} numberOfLines={2}>
-          {item.name}
-        </Text>
-        {item.desc ? (
-          <Text style={styles.boardTileDesc} numberOfLines={1}>
-            {item.desc}
-          </Text>
-        ) : null}
-        <View style={styles.boardTileActions}>
-          <TouchableOpacity
-            onPress={() => openEditModal(item)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="pencil-outline" size={14} color={COLORS.accent} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => removeBoard(item.id)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="trash-outline" size={14} color={COLORS.secondary} />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+  const subtitle =
+    status === "ready" ? `${boards.length} board${boards.length > 1 ? "s" : ""}` : undefined;
 
   return (
-    <>
-      <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={20} color={COLORS.text} />
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>{workspace?.displayName}</Text>
-            <Text style={styles.headerCount}>
-              {boards.length} board{boards.length > 1 ? "s" : ""}
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={styles.addBtn}
-            onPress={() => setCreateModal(true)}
-          >
-            <Ionicons name="add" size={22} color={COLORS.background} />
-          </TouchableOpacity>
+    <Screen>
+      <Header
+        title={workspace?.displayName ?? "Espace de travail"}
+        subtitle={subtitle}
+        right={
+          workspace ? (
+            <IconButton
+              icon="create-outline"
+              accessibilityLabel="Modifier l'espace de travail"
+              onPress={() => setEditingWorkspace(true)}
+            />
+          ) : null
+        }
+      />
+
+      {status === "error" && error ? (
+        <ErrorState message={error} onRetry={retry} />
+      ) : status === "loading" ? (
+        <View style={[styles.grid, styles.skeletons]}>
+          {Array.from({ length: columns * 2 }, (_, i) => (
+            <Skeleton key={i} width={tileWidth} height={160} radius={18} />
+          ))}
         </View>
-
+      ) : (
         <FlatList
+          key={columns}
           data={boards}
+          numColumns={columns}
           keyExtractor={(item) => item.id}
-          numColumns={2}
-          columnWrapperStyle={styles.row}
           contentContainerStyle={styles.grid}
+          columnWrapperStyle={columns > 1 ? { gap: GAP } : undefined}
           showsVerticalScrollIndicator={false}
-          renderItem={renderBoardItem}
-          ListEmptyComponent={
-            !loading ? (
-              <View style={styles.empty}>
-                <Ionicons name="grid-outline" size={56} color={COLORS.accent} />
-                <Text style={styles.emptyText}>Aucun board</Text>
-                <Text style={styles.emptySubText}>Crée ton premier board</Text>
-                <TouchableOpacity
-                  style={styles.emptyBtn}
-                  onPress={() => setCreateModal(true)}
-                >
-                  <Text style={styles.emptyBtnText}>+ Nouveau Board</Text>
-                </TouchableOpacity>
-              </View>
-            ) : null
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} colors={[colors.primary]} />
           }
+          ListEmptyComponent={
+            <EmptyState
+              icon="grid-outline"
+              title="Aucun board"
+              message="Un board regroupe les listes et les cartes d'un projet."
+              actionLabel="Créer un board"
+              onAction={() => setCreating(true)}
+            />
+          }
+          renderItem={({ item, index }) => (
+            <BoardTile
+              board={item}
+              index={index}
+              width={tileWidth}
+              onPress={() => router.push(`/boards/${item.id}`)}
+              onMore={() => setSelected(item)}
+            />
+          )}
         />
-        <Modal visible={createModal} transparent animationType="slide">
-          <KeyboardAvoidingView
-            style={styles.modalOverlay}
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-          >
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Nouveau Board</Text>
-                <Pressable onPress={() => setCreateModal(false)}>
-                  <Ionicons name="close" size={24} color={COLORS.secondary} />
-                </Pressable>
-              </View>
-              <ScrollView keyboardShouldPersistTaps="handled">
-                <BoardForm
-                  loading={loading}
-                  onClose={() => setCreateModal(false)}
-                  onCreate={handleCreate}
-                />
-              </ScrollView>
-            </View>
-          </KeyboardAvoidingView>
-        </Modal>
+      )}
 
-        <Modal visible={editModal} transparent animationType="slide">
-          <KeyboardAvoidingView
-            style={styles.modalOverlay}
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-          >
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Modifier le Board</Text>
-                <Pressable
-                  onPress={() => {
-                    setEditModal(false);
-                    setBoardToEdit(null);
-                  }}
-                >
-                  <Ionicons name="close" size={24} color={COLORS.secondary} />
-                </Pressable>
-              </View>
-              <ScrollView keyboardShouldPersistTaps="handled">
-                <BoardForm
-                  loading={loading}
-                  onClose={() => {
-                    setEditModal(false);
-                    setBoardToEdit(null);
-                  }}
-                  onEdit={handleEdit}
-                  boardToEdit={boardToEdit}
-                />
-              </ScrollView>
-            </View>
-          </KeyboardAvoidingView>
-        </Modal>
-      </View>
-    </>
+      {status === "ready" && boards.length > 0 ? <Fab label="Nouveau board" onPress={() => setCreating(true)} /> : null}
+
+      <Sheet visible={creating} onClose={() => setCreating(false)} title="Nouveau board">
+        <CreateBoardForm
+          existingBoards={boards}
+          onCancel={() => setCreating(false)}
+          onSubmit={async (values) => {
+            const ok = await addBoard(values);
+            if (ok) setCreating(false);
+            return ok;
+          }}
+        />
+      </Sheet>
+
+      <Sheet visible={!!editing} onClose={() => setEditing(null)} title="Modifier le board">
+        {editing ? (
+          <EntityForm
+            nameLabel="Nom du board"
+            namePlaceholder="Nom du board"
+            withDescription
+            initialValues={{ name: editing.name, desc: editing.desc }}
+            submitLabel="Enregistrer"
+            onCancel={() => setEditing(null)}
+            onSubmit={async ({ name, desc }) => {
+              const ok = await editBoard(editing.id, { name, desc });
+              if (ok) setEditing(null);
+              return ok;
+            }}
+          />
+        ) : null}
+      </Sheet>
+
+      <Sheet visible={editingWorkspace} onClose={() => setEditingWorkspace(false)} title="Modifier l'espace de travail">
+        {workspace ? (
+          <EntityForm
+            nameLabel="Nom"
+            namePlaceholder="Nom de l'espace"
+            withDescription
+            initialValues={{ name: workspace.displayName, desc: workspace.desc }}
+            submitLabel="Enregistrer"
+            onCancel={() => setEditingWorkspace(false)}
+            onSubmit={async ({ name, desc }) => {
+              const ok = await editWorkspace({ displayName: name, desc });
+              if (ok) setEditingWorkspace(false);
+              return ok;
+            }}
+          />
+        ) : null}
+      </Sheet>
+
+      <ActionSheet
+        visible={!!selected}
+        onClose={() => setSelected(null)}
+        title={selected?.name}
+        actions={
+          selected
+            ? [
+                {
+                  label: selected.starred ? "Retirer des favoris" : "Ajouter aux favoris",
+                  icon: selected.starred ? "star" : "star-outline",
+                  onPress: () => toggleStar(selected.id, !!selected.starred),
+                },
+                { label: "Modifier", icon: "create-outline", onPress: () => setEditing(selected) },
+                { label: "Supprimer", icon: "trash-outline", destructive: true, onPress: () => askDelete(selected) },
+              ]
+            : []
+        }
+      />
+    </Screen>
   );
 }
 
-const TILE_SIZE = 160;
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  centered: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-    backgroundColor: COLORS.background,
-  },
-  errorText: { color: COLORS.secondary, fontSize: 14 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 16,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(180,151,214,0.15)",
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(180,151,214,0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerCenter: { alignItems: "center" },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: COLORS.text },
-  headerCount: { fontSize: 12, color: COLORS.secondary, marginTop: 2 },
-  addBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.accent,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  grid: { padding: 16, paddingBottom: 100 },
-  row: { justifyContent: "space-between", marginBottom: 16 },
-  boardTile: {
-    width: TILE_SIZE,
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(180,151,214,0.15)",
-  },
-  boardTileTop: {
-    height: 90,
-    backgroundColor: "rgba(180,151,214,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  boardTileLetter: { fontSize: 36, fontWeight: "800", color: COLORS.accent },
-  boardTileBottom: { padding: 12, gap: 4 },
-  boardTileName: { fontSize: 14, fontWeight: "700", color: COLORS.text },
-  boardTileDesc: { fontSize: 12, color: COLORS.secondary },
-  boardTileActions: { flexDirection: "row", gap: 12, marginTop: 8 },
-  empty: { alignItems: "center", gap: 12, paddingTop: 80 },
-  emptyText: { fontSize: 18, fontWeight: "700", color: COLORS.text },
-  emptySubText: { fontSize: 14, color: COLORS.secondary },
-  emptyBtn: {
-    marginTop: 8,
-    backgroundColor: COLORS.accent,
-    borderRadius: 99,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  emptyBtnText: { fontSize: 14, fontWeight: "600", color: COLORS.background },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 24,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  modalTitle: { fontSize: 20, fontWeight: "700", color: COLORS.text },
-});
+const makeStyles = ({ spacing }: Theme) =>
+  StyleSheet.create({
+    grid: { paddingHorizontal: GUTTER, paddingTop: spacing.sm, paddingBottom: 120, gap: GAP, flexGrow: 1 },
+    skeletons: { flexDirection: "row", flexWrap: "wrap" },
+  });
