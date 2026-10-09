@@ -27,11 +27,9 @@ L'application parle directement à l'API REST de Trello : il n'y a pas de serveu
 
 Les APK sont publiés dans les [Releases](https://github.com/Paul-Tano/Trelltech/releases) du dépôt (ils ne sont plus versionnés dans le code).
 
-Pour générer un APK à jour :
+Les APK sont compilés automatiquement par GitHub Actions (workflow « Android APK ») à chaque tag `v*`, ou à la demande depuis l'onglet **Actions**. Il suffit que le secret de dépôt `TRELLO_API_KEY` soit défini.
 
-```bash
-npx eas build --platform android --profile preview
-```
+En local, avec un compte Expo : `npx eas build --platform android --profile preview`.
 
 ## Installation pour les développeurs
 
