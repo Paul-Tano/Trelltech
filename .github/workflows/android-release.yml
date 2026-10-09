@@ -1,12 +1,13 @@
 name: Android APK
 
-# Compile l'APK sur les serveurs GitHub et le publie dans une Release.
-# Déclenchement : push d'un tag "v*" (ex. v2.0.0) ou lancement manuel depuis l'onglet Actions.
+# Compile l'APK sur les serveurs GitHub et l'attache à une Release.
+# Déclenchement : publication d'une Release (onglet Releases → Draft a new release, tag "v2.0.0"…)
+# ou lancement manuel depuis l'onglet Actions.
 # Prérequis : secret de dépôt TRELLO_API_KEY (Settings → Secrets and variables → Actions).
 
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       version:
@@ -54,7 +55,7 @@ jobs:
       - name: Nommer l'APK
         id: apk
         run: |
-          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          VERSION="${{ github.event.inputs.version || github.event.release.tag_name }}"
           VERSION="${VERSION#v}"
           cp android/app/build/outputs/apk/release/app-release.apk "TrellTech-$VERSION.apk"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -65,7 +66,17 @@ jobs:
           name: TrellTech-${{ steps.apk.outputs.version }}
           path: ${{ steps.apk.outputs.file }}
 
+      # Release publiée à la main : on y ajoute l'APK sans toucher à son texte.
+      - name: Attacher l'APK à la Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: ${{ steps.apk.outputs.file }}
+
+      # Lancement manuel : on crée la Release.
       - name: Publier la Release
+        if: github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.apk.outputs.version }}
